@@ -1,0 +1,1069 @@
+--------------------------------------------------------------------------------
+--
+-- sql firewall rule export/import
+--
+--
+--------------------------------------------------------------------------------
+--
+-- prepare the whitelist and blacklist rules
+--   * learned whitelist rules
+--   * manually added whitelist rules
+--   * manually added blacklist rules
+--
+-- 
+-- set to whitelist engine
+--
+ALTER SYSTEM SET sql_firewall.engine    TO whitelist;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'whitelist');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ whitelist
+(1 row)
+
+--
+-- prepare test table and its tuples
+--
+CREATE TABLE employee(id int, gender char, name text, age int);
+INSERT INTO employee(id, gender, name, age) VALUES (1, 'f', 'Bai Cai',     16), 
+       	    		 	       	    	   (2, 'm', 'Cheng Cheng', 20),
+						   (3, 'm', 'Cai Lei',     23),
+						   (5, 'f', 'Chen Wei',    32),
+						   (6, 'm', 'Li Ming',     27);
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  16
+  2 | m      | Cheng Cheng |  20
+  3 | m      | Cai Lei     |  23
+  5 | f      | Chen Wei    |  32
+  6 | m      | Li Ming     |  27
+(5 rows)
+
+ALTER SYSTEM SET sql_firewall.firewall TO    disabled;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.firewall', 'disabled');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.firewall;
+ sql_firewall.firewall 
+-----------------------
+ disabled
+(1 row)
+
+SELECT sql_firewall_reset();
+ sql_firewall_reset 
+--------------------
+ 
+(1 row)
+
+--
+-- learn whitelist rules
+--
+ALTER SYSTEM SET sql_firewall.firewall TO    learning;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.firewall', 'learning');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SHOW sql_firewall.firewall;
+ sql_firewall.firewall 
+-----------------------
+ learning
+(1 row)
+
+SELECT wait_be_set('sql_firewall.firewall', 'learning');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+ALTER SYSTEM SET sql_firewall.engine TO hybrid;
+ALTER SYSTEM SET sql_firewall.engine TO blacklist;
+ALTER SYSTEM SET sql_firewall.engine TO whitelist;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'whitelist');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ whitelist
+(1 row)
+
+SELECT * FROM employee WHERE id = 1;
+ id | gender |  name   | age 
+----+--------+---------+-----
+  1 | f      | Bai Cai |  16
+(1 row)
+
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  16
+  2 | m      | Cheng Cheng |  20
+  3 | m      | Cai Lei     |  23
+  5 | f      | Chen Wei    |  32
+  6 | m      | Li Ming     |  27
+(5 rows)
+
+ALTER SYSTEM SET sql_firewall.firewall TO    disabled;
+SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE '%pg_sleep%';
+ userid |  queryid   |                            query                             | calls | banned |   type    
+--------+------------+--------------------------------------------------------------+-------+--------+-----------
+     10 | 4175383890 | ALTER SYSTEM SET sql_firewall.engine TO hybrid;              |     0 |      0 | whitelist
+     10 | 2902689240 | SHOW sql_firewall.engine;                                    |     0 |      0 | whitelist
+     10 | 3858458623 | SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE ?; |     0 |      0 | whitelist
+     10 | 3459310925 | SELECT * FROM employee WHERE id = ?;                         |     0 |      0 | whitelist
+     10 | 3407341580 | ALTER SYSTEM SET sql_firewall.firewall TO    disabled;       |     0 |      0 | whitelist
+     10 | 1264075694 | SELECT * FROM employee;                                      |     0 |      0 | whitelist
+     10 | 2128089821 | SELECT wait_be_set(?, ?);                                    |     0 |      0 | whitelist
+     10 |  167207106 | SHOW sql_firewall.firewall;                                  |     0 |      0 | whitelist
+     10 | 3186211987 | ALTER SYSTEM SET sql_firewall.engine TO whitelist;           |     0 |      0 | whitelist
+     10 |  696132012 | ALTER SYSTEM SET sql_firewall.engine TO blacklist;           |     0 |      0 | whitelist
+     10 | 1378796334 | SELECT pg_reload_conf();                                     |     0 |      0 | whitelist
+(11 rows)
+
+--
+-- the following whitelist rules should be properly configured here before
+-- we test our whitelist rule engine, if this does not hold we would not be
+-- able to disable the firewall of 'enforcing' mode at all, and then we
+-- would not be able to do our rest tests.
+--
+ALTER SYSTEM SET sql_firewall.firewall TO    disabled;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.firewall', 'disabled');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.firewall;
+ sql_firewall.firewall 
+-----------------------
+ disabled
+(1 row)
+
+-- pg_sleep is radomly called so we ignore it here.
+SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE '%pg_sleep%';
+ userid |  queryid   |                            query                             | calls | banned |   type    
+--------+------------+--------------------------------------------------------------+-------+--------+-----------
+     10 | 4175383890 | ALTER SYSTEM SET sql_firewall.engine TO hybrid;              |     0 |      0 | whitelist
+     10 | 2902689240 | SHOW sql_firewall.engine;                                    |     0 |      0 | whitelist
+     10 | 3858458623 | SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE ?; |     0 |      0 | whitelist
+     10 | 3459310925 | SELECT * FROM employee WHERE id = ?;                         |     0 |      0 | whitelist
+     10 | 3407341580 | ALTER SYSTEM SET sql_firewall.firewall TO    disabled;       |     0 |      0 | whitelist
+     10 | 1264075694 | SELECT * FROM employee;                                      |     0 |      0 | whitelist
+     10 | 2128089821 | SELECT wait_be_set(?, ?);                                    |     0 |      0 | whitelist
+     10 |  167207106 | SHOW sql_firewall.firewall;                                  |     0 |      0 | whitelist
+     10 | 3186211987 | ALTER SYSTEM SET sql_firewall.engine TO whitelist;           |     0 |      0 | whitelist
+     10 |  696132012 | ALTER SYSTEM SET sql_firewall.engine TO blacklist;           |     0 |      0 | whitelist
+     10 | 1378796334 | SELECT pg_reload_conf();                                     |     0 |      0 | whitelist
+(11 rows)
+
+SHOW sql_firewall.firewall;
+ sql_firewall.firewall 
+-----------------------
+ disabled
+(1 row)
+
+SHOW sql_firewall.max;
+ sql_firewall.max 
+------------------
+ 5000
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ whitelist
+(1 row)
+
+--
+-- allowed query rule for 'employee'
+--
+SELECT sql_firewall.add_rule('postgres', 'UPDATE employee SET age = age + 1;', 'whitelist');
+ add_rule 
+----------
+ t
+(1 row)
+
+--
+-- prohibited query rule for 'employee'
+--
+SELECT sql_firewall.add_rule('postgres', 'UPDATE employee SET age = age + 10 WHERE id in (1, 2);', 'blacklist');
+ add_rule 
+----------
+ t
+(1 row)
+
+-- the following rule is defined for the same query, they should work on different rule engines.
+SELECT sql_firewall.add_rule('postgres', 'SELECT * FROM employee WHERE id in (5, 10);',            'whitelist');
+ add_rule 
+----------
+ t
+(1 row)
+
+SELECT sql_firewall.add_rule('postgres', 'SELECT * FROM employee WHERE id in (5, 10);',            'blacklist');
+ add_rule 
+----------
+ t
+(1 row)
+
+-- pg_sleep is radomly called so we ignore it here.
+SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE '%pg_sleep%';
+ userid |  queryid   |                            query                             | calls | banned |   type    
+--------+------------+--------------------------------------------------------------+-------+--------+-----------
+     10 | 4175383890 | ALTER SYSTEM SET sql_firewall.engine TO hybrid;              |     0 |      0 | whitelist
+     10 | 2902689240 | SHOW sql_firewall.engine;                                    |     0 |      0 | whitelist
+     10 | 3858458623 | SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE ?; |     0 |      0 | whitelist
+     10 | 1877630178 | UPDATE employee SET age = age + ?;                           |     0 |      0 | whitelist
+     10 | 3459310925 | SELECT * FROM employee WHERE id = ?;                         |     0 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     0 |      0 | blacklist
+     10 | 3407341580 | ALTER SYSTEM SET sql_firewall.firewall TO    disabled;       |     0 |      0 | whitelist
+     10 | 1536176700 | UPDATE employee SET age = age + ? WHERE id in (?, ?);        |     0 |      0 | blacklist
+     10 | 1264075694 | SELECT * FROM employee;                                      |     0 |      0 | whitelist
+     10 | 2128089821 | SELECT wait_be_set(?, ?);                                    |     0 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     0 |      0 | whitelist
+     10 |  167207106 | SHOW sql_firewall.firewall;                                  |     0 |      0 | whitelist
+     10 | 3186211987 | ALTER SYSTEM SET sql_firewall.engine TO whitelist;           |     0 |      0 | whitelist
+     10 |  696132012 | ALTER SYSTEM SET sql_firewall.engine TO blacklist;           |     0 |      0 | whitelist
+     10 | 1378796334 | SELECT pg_reload_conf();                                     |     0 |      0 | whitelist
+(15 rows)
+
+--------------------------------------------------------------------------------
+-- 
+-- export sql firewall rules
+-- 
+--------------------------------------------------------------------------------
+SELECT sql_firewall.export_rule('sql_firewall-rules.csv');
+ export_rule 
+-------------
+ t
+(1 row)
+
+-- pg_sleep is radomly called so we ignore it here.
+SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE '%pg_sleep%';
+ userid |  queryid   |                            query                             | calls | banned |   type    
+--------+------------+--------------------------------------------------------------+-------+--------+-----------
+     10 | 4175383890 | ALTER SYSTEM SET sql_firewall.engine TO hybrid;              |     0 |      0 | whitelist
+     10 | 2902689240 | SHOW sql_firewall.engine;                                    |     0 |      0 | whitelist
+     10 | 3858458623 | SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE ?; |     0 |      0 | whitelist
+     10 | 1877630178 | UPDATE employee SET age = age + ?;                           |     0 |      0 | whitelist
+     10 | 3459310925 | SELECT * FROM employee WHERE id = ?;                         |     0 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     0 |      0 | blacklist
+     10 | 3407341580 | ALTER SYSTEM SET sql_firewall.firewall TO    disabled;       |     0 |      0 | whitelist
+     10 | 1536176700 | UPDATE employee SET age = age + ? WHERE id in (?, ?);        |     0 |      0 | blacklist
+     10 | 1264075694 | SELECT * FROM employee;                                      |     0 |      0 | whitelist
+     10 | 2128089821 | SELECT wait_be_set(?, ?);                                    |     0 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     0 |      0 | whitelist
+     10 |  167207106 | SHOW sql_firewall.firewall;                                  |     0 |      0 | whitelist
+     10 | 3186211987 | ALTER SYSTEM SET sql_firewall.engine TO whitelist;           |     0 |      0 | whitelist
+     10 |  696132012 | ALTER SYSTEM SET sql_firewall.engine TO blacklist;           |     0 |      0 | whitelist
+     10 | 1378796334 | SELECT pg_reload_conf();                                     |     0 |      0 | whitelist
+(15 rows)
+
+--
+-- clear sql firewall rules
+--
+SELECT sql_firewall_reset();
+ sql_firewall_reset 
+--------------------
+ 
+(1 row)
+
+-- pg_sleep is radomly called so we ignore it here.
+SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE '%pg_sleep%';
+ userid | queryid | query | calls | banned | type 
+--------+---------+-------+-------+--------+------
+(0 rows)
+
+--
+-- import the exported rules above
+--
+SELECT sql_firewall.import_rule('sql_firewall-rules.csv');
+ import_rule 
+-------------
+ t
+(1 row)
+
+-- pg_sleep is radomly called so we ignore it here.
+SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE '%pg_sleep%';
+ userid |  queryid   |                            query                             | calls | banned |   type    
+--------+------------+--------------------------------------------------------------+-------+--------+-----------
+     10 | 4175383890 | ALTER SYSTEM SET sql_firewall.engine TO hybrid;              |     0 |      0 | whitelist
+     10 | 2902689240 | SHOW sql_firewall.engine;                                    |     0 |      0 | whitelist
+     10 | 3858458623 | SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE ?; |     0 |      0 | whitelist
+     10 | 1877630178 | UPDATE employee SET age = age + ?;                           |     0 |      0 | whitelist
+     10 | 3459310925 | SELECT * FROM employee WHERE id = ?;                         |     0 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     0 |      0 | blacklist
+     10 | 3407341580 | ALTER SYSTEM SET sql_firewall.firewall TO    disabled;       |     0 |      0 | whitelist
+     10 | 1536176700 | UPDATE employee SET age = age + ? WHERE id in (?, ?);        |     0 |      0 | blacklist
+     10 | 1264075694 | SELECT * FROM employee;                                      |     0 |      0 | whitelist
+     10 | 2128089821 | SELECT wait_be_set(?, ?);                                    |     0 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     0 |      0 | whitelist
+     10 |  167207106 | SHOW sql_firewall.firewall;                                  |     0 |      0 | whitelist
+     10 | 3186211987 | ALTER SYSTEM SET sql_firewall.engine TO whitelist;           |     0 |      0 | whitelist
+     10 |  696132012 | ALTER SYSTEM SET sql_firewall.engine TO blacklist;           |     0 |      0 | whitelist
+     10 | 1378796334 | SELECT pg_reload_conf();                                     |     0 |      0 | whitelist
+(15 rows)
+
+-- 
+-- verify the imported sql firewall rules works as expected on the following
+-- test cases
+-- 
+ALTER SYSTEM SET sql_firewall.firewall TO    enforcing;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.firewall', 'enforcing');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.firewall;
+ sql_firewall.firewall 
+-----------------------
+ enforcing
+(1 row)
+
+--------------------------------------------------------------------------------
+-- 
+-- testcase 01: blacklist rule engine
+--   switched from whitelist rule engine
+-- 
+--------------------------------------------------------------------------------
+-- pg_sleep is radomly called so we ignore it here.
+SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE '%pg_sleep%';
+ userid |  queryid   |                            query                             | calls | banned |   type    
+--------+------------+--------------------------------------------------------------+-------+--------+-----------
+     10 | 4175383890 | ALTER SYSTEM SET sql_firewall.engine TO hybrid;              |     0 |      0 | whitelist
+     10 | 2902689240 | SHOW sql_firewall.engine;                                    |     0 |      0 | whitelist
+     10 | 3858458623 | SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE ?; |     1 |      0 | whitelist
+     10 | 1877630178 | UPDATE employee SET age = age + ?;                           |     0 |      0 | whitelist
+     10 | 3459310925 | SELECT * FROM employee WHERE id = ?;                         |     0 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     0 |      0 | blacklist
+     10 | 3407341580 | ALTER SYSTEM SET sql_firewall.firewall TO    disabled;       |     0 |      0 | whitelist
+     10 | 1536176700 | UPDATE employee SET age = age + ? WHERE id in (?, ?);        |     0 |      0 | blacklist
+     10 | 1264075694 | SELECT * FROM employee;                                      |     0 |      0 | whitelist
+     10 | 2128089821 | SELECT wait_be_set(?, ?);                                    |     2 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     0 |      0 | whitelist
+     10 |  167207106 | SHOW sql_firewall.firewall;                                  |     1 |      0 | whitelist
+     10 | 3186211987 | ALTER SYSTEM SET sql_firewall.engine TO whitelist;           |     0 |      0 | whitelist
+     10 |  696132012 | ALTER SYSTEM SET sql_firewall.engine TO blacklist;           |     0 |      0 | whitelist
+     10 | 1378796334 | SELECT pg_reload_conf();                                     |     0 |      0 | whitelist
+(15 rows)
+
+ALTER SYSTEM SET sql_firewall.engine TO blacklist;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'blacklist');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ blacklist
+(1 row)
+
+-- 
+-- should be allowed. for blacklist rule engine, there is no blacklist rule for
+-- them.
+-- 
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  16
+  2 | m      | Cheng Cheng |  20
+  3 | m      | Cai Lei     |  23
+  5 | f      | Chen Wei    |  32
+  6 | m      | Li Ming     |  27
+(5 rows)
+
+SELECT * FROM employee WHERE id = 1;
+ id | gender |  name   | age 
+----+--------+---------+-----
+  1 | f      | Bai Cai |  16
+(1 row)
+
+--
+-- should be allowed. for blacklist rule engine, there is no blacklist rule for
+-- them.
+--
+UPDATE employee SET age = age - 2;
+--
+-- the following queries are not allowed, as there are blacklist rules for
+-- them and the rule engine is in blacklist mode.
+UPDATE employee SET age = age + 10 WHERE id in (2, 3);
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : UPDATE employee SET age = age + 10 WHERE id in (2, 3);
+SELECT * FROM employee WHERE id in (5, 10);
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : SELECT * FROM employee WHERE id in (5, 10);
+-- 
+-- verify the execution of above queries
+-- 
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  14
+  2 | m      | Cheng Cheng |  18
+  3 | m      | Cai Lei     |  21
+  5 | f      | Chen Wei    |  30
+  6 | m      | Li Ming     |  25
+(5 rows)
+
+--------------------------------------------------------------------------------
+-- 
+-- testcase 02: hybrid rule engine
+--   switched from blacklist rule engine
+-- 
+--------------------------------------------------------------------------------
+-- pg_sleep is radomly called so we ignore it here.
+SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE '%pg_sleep%';
+ userid |  queryid   |                            query                             | calls | banned |   type    
+--------+------------+--------------------------------------------------------------+-------+--------+-----------
+     10 | 4175383890 | ALTER SYSTEM SET sql_firewall.engine TO hybrid;              |     0 |      0 | whitelist
+     10 | 2902689240 | SHOW sql_firewall.engine;                                    |     0 |      0 | whitelist
+     10 | 3858458623 | SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE ?; |     2 |      0 | whitelist
+     10 | 1877630178 | UPDATE employee SET age = age + ?;                           |     0 |      0 | whitelist
+     10 | 3459310925 | SELECT * FROM employee WHERE id = ?;                         |     0 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     0 |      1 | blacklist
+     10 | 3407341580 | ALTER SYSTEM SET sql_firewall.firewall TO    disabled;       |     0 |      0 | whitelist
+     10 | 1536176700 | UPDATE employee SET age = age + ? WHERE id in (?, ?);        |     0 |      1 | blacklist
+     10 | 1264075694 | SELECT * FROM employee;                                      |     0 |      0 | whitelist
+     10 | 2128089821 | SELECT wait_be_set(?, ?);                                    |     2 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     0 |      0 | whitelist
+     10 |  167207106 | SHOW sql_firewall.firewall;                                  |     1 |      0 | whitelist
+     10 | 3186211987 | ALTER SYSTEM SET sql_firewall.engine TO whitelist;           |     0 |      0 | whitelist
+     10 |  696132012 | ALTER SYSTEM SET sql_firewall.engine TO blacklist;           |     1 |      0 | whitelist
+     10 | 1378796334 | SELECT pg_reload_conf();                                     |     1 |      0 | whitelist
+(15 rows)
+
+ALTER SYSTEM SET sql_firewall.engine TO hybrid;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'hybrid');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ hybrid
+(1 row)
+
+-- 
+-- should be allowed. for blacklist rule engine, there is no blacklist rule for
+-- them.
+-- 
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  14
+  2 | m      | Cheng Cheng |  18
+  3 | m      | Cai Lei     |  21
+  5 | f      | Chen Wei    |  30
+  6 | m      | Li Ming     |  25
+(5 rows)
+
+SELECT * FROM employee WHERE id = 5;
+ id | gender |   name   | age 
+----+--------+----------+-----
+  5 | f      | Chen Wei |  30
+(1 row)
+
+--
+-- should be allowed. for blacklist rule engine, there is no blacklist rule for
+-- them.
+--
+UPDATE employee SET age = age + 10;
+--
+-- the following queries are not allowed, as there are blacklist rules or there
+-- is no whitelist rule entry for them and the rule engine is in blacklist mode.
+-- 
+UPDATE employee SET age = age + 10 WHERE id in (2, 3);
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : UPDATE employee SET age = age + 10 WHERE id in (2, 3);
+SELECT * FROM employee WHERE id in (5, 10);
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : SELECT * FROM employee WHERE id in (5, 10);
+SELECT * FROM employee where gender = 'f' AND name like 'Chen %';
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : SELECT * FROM employee where gender = 'f' AND name like 'Chen %';
+-- 
+-- verify the execution of above queries
+-- 
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  24
+  2 | m      | Cheng Cheng |  28
+  3 | m      | Cai Lei     |  31
+  5 | f      | Chen Wei    |  40
+  6 | m      | Li Ming     |  35
+(5 rows)
+
+--------------------------------------------------------------------------------
+-- 
+-- testcase 03: whitelist rule engine
+--   switched from hybrid rule engine
+-- 
+--------------------------------------------------------------------------------
+-- pg_sleep is radomly called so we ignore it here.
+SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE '%pg_sleep%';
+ userid |  queryid   |                            query                             | calls | banned |   type    
+--------+------------+--------------------------------------------------------------+-------+--------+-----------
+     10 | 4175383890 | ALTER SYSTEM SET sql_firewall.engine TO hybrid;              |     0 |      0 | whitelist
+     10 | 2902689240 | SHOW sql_firewall.engine;                                    |     1 |      0 | whitelist
+     10 | 3858458623 | SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE ?; |     3 |      0 | whitelist
+     10 | 1877630178 | UPDATE employee SET age = age + ?;                           |     2 |      0 | whitelist
+     10 | 3459310925 | SELECT * FROM employee WHERE id = ?;                         |     2 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     0 |      2 | blacklist
+     10 | 3407341580 | ALTER SYSTEM SET sql_firewall.firewall TO    disabled;       |     0 |      0 | whitelist
+     10 | 1536176700 | UPDATE employee SET age = age + ? WHERE id in (?, ?);        |     0 |      2 | blacklist
+     10 | 1264075694 | SELECT * FROM employee;                                      |     2 |      0 | whitelist
+     10 | 2128089821 | SELECT wait_be_set(?, ?);                                    |     4 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     0 |      0 | whitelist
+     10 |  167207106 | SHOW sql_firewall.firewall;                                  |     1 |      0 | whitelist
+     10 | 3186211987 | ALTER SYSTEM SET sql_firewall.engine TO whitelist;           |     0 |      0 | whitelist
+     10 |  696132012 | ALTER SYSTEM SET sql_firewall.engine TO blacklist;           |     1 |      0 | whitelist
+     10 | 1378796334 | SELECT pg_reload_conf();                                     |     1 |      0 | whitelist
+(15 rows)
+
+ALTER SYSTEM SET sql_firewall.engine TO whitelist;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'whitelist');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ whitelist
+(1 row)
+
+-- 
+-- there is a whitelist rule for following queries, they are permitted,
+-- these rules are learned whitelist rules.
+-- 
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  24
+  2 | m      | Cheng Cheng |  28
+  3 | m      | Cai Lei     |  31
+  5 | f      | Chen Wei    |  40
+  6 | m      | Li Ming     |  35
+(5 rows)
+
+SELECT * FROM employee WHERE id = 1;
+ id | gender |  name   | age 
+----+--------+---------+-----
+  1 | f      | Bai Cai |  24
+(1 row)
+
+--
+-- there is also a whitelist rule for this query, it is permitted, the rule is
+-- mannully added as above.
+--
+UPDATE employee SET age = age + 100;
+--
+-- the following queries are not permitted, as there are no whitelist rules for
+-- them and the rule engine is in whitelist mode.
+UPDATE employee SET age = age + 10 WHERE id in (2, 3);
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : UPDATE employee SET age = age + 10 WHERE id in (2, 3);
+SELECT * FROM employee WHERE id in (5, 10);
+ id | gender |   name   | age 
+----+--------+----------+-----
+  5 | f      | Chen Wei | 140
+(1 row)
+
+-- 
+-- verify the execution of above queries
+-- 
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     | 124
+  2 | m      | Cheng Cheng | 128
+  3 | m      | Cai Lei     | 131
+  5 | f      | Chen Wei    | 140
+  6 | m      | Li Ming     | 135
+(5 rows)
+
+--------------------------------------------------------------------------------
+-- 
+-- testcase 04: hybrid rule engine
+--   switched from whitelist rule engine
+--
+--------------------------------------------------------------------------------
+-- pg_sleep is radomly called so we ignore it here.
+SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE '%pg_sleep%';
+ userid |  queryid   |                            query                             | calls | banned |   type    
+--------+------------+--------------------------------------------------------------+-------+--------+-----------
+     10 | 4175383890 | ALTER SYSTEM SET sql_firewall.engine TO hybrid;              |     0 |      0 | whitelist
+     10 | 2902689240 | SHOW sql_firewall.engine;                                    |     2 |      0 | whitelist
+     10 | 3858458623 | SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE ?; |     5 |      0 | whitelist
+     10 | 1877630178 | UPDATE employee SET age = age + ?;                           |     4 |      0 | whitelist
+     10 | 3459310925 | SELECT * FROM employee WHERE id = ?;                         |     4 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     0 |      2 | blacklist
+     10 | 3407341580 | ALTER SYSTEM SET sql_firewall.firewall TO    disabled;       |     0 |      0 | whitelist
+     10 | 1536176700 | UPDATE employee SET age = age + ? WHERE id in (?, ?);        |     0 |      2 | blacklist
+     10 | 1264075694 | SELECT * FROM employee;                                      |     4 |      0 | whitelist
+     10 | 2128089821 | SELECT wait_be_set(?, ?);                                    |     6 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     2 |      0 | whitelist
+     10 |  167207106 | SHOW sql_firewall.firewall;                                  |     1 |      0 | whitelist
+     10 | 3186211987 | ALTER SYSTEM SET sql_firewall.engine TO whitelist;           |     1 |      0 | whitelist
+     10 |  696132012 | ALTER SYSTEM SET sql_firewall.engine TO blacklist;           |     1 |      0 | whitelist
+     10 | 1378796334 | SELECT pg_reload_conf();                                     |     2 |      0 | whitelist
+(15 rows)
+
+ALTER SYSTEM SET sql_firewall.engine TO hybrid;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'hybrid');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ hybrid
+(1 row)
+
+-- 
+-- should be allowed. for blacklist rule engine, there is no blacklist rule for
+-- them.
+-- 
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     | 124
+  2 | m      | Cheng Cheng | 128
+  3 | m      | Cai Lei     | 131
+  5 | f      | Chen Wei    | 140
+  6 | m      | Li Ming     | 135
+(5 rows)
+
+SELECT * FROM employee WHERE id = 5;
+ id | gender |   name   | age 
+----+--------+----------+-----
+  5 | f      | Chen Wei | 140
+(1 row)
+
+--
+-- should be allowed. for blacklist rule engine, there is no blacklist rule for
+-- them.
+--
+UPDATE employee SET age = age + 10;
+--
+-- the following queries are not allowed, as there are blacklist rules or there
+-- is no whitelist rule entry for them and the rule engine is in blacklist mode.
+-- 
+UPDATE employee SET age = age + 10 WHERE id in (2, 3);
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : UPDATE employee SET age = age + 10 WHERE id in (2, 3);
+SELECT * FROM employee WHERE id in (5, 10);
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : SELECT * FROM employee WHERE id in (5, 10);
+SELECT * FROM employee where gender = 'f' AND name like 'Chen %';
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : SELECT * FROM employee where gender = 'f' AND name like 'Chen %';
+-- 
+-- verify the execution of above queries
+-- 
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     | 134
+  2 | m      | Cheng Cheng | 138
+  3 | m      | Cai Lei     | 141
+  5 | f      | Chen Wei    | 150
+  6 | m      | Li Ming     | 145
+(5 rows)
+
+--------------------------------------------------------------------------------
+-- 
+-- testcase 05: blacklist rule engine
+--   switched from hybrid rule engine
+-- 
+--------------------------------------------------------------------------------
+-- pg_sleep is radomly called so we ignore it here.
+SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE '%pg_sleep%';
+ userid |  queryid   |                            query                             | calls | banned |   type    
+--------+------------+--------------------------------------------------------------+-------+--------+-----------
+     10 | 4175383890 | ALTER SYSTEM SET sql_firewall.engine TO hybrid;              |     1 |      0 | whitelist
+     10 | 2902689240 | SHOW sql_firewall.engine;                                    |     3 |      0 | whitelist
+     10 | 3858458623 | SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE ?; |     7 |      0 | whitelist
+     10 | 1877630178 | UPDATE employee SET age = age + ?;                           |     6 |      0 | whitelist
+     10 | 3459310925 | SELECT * FROM employee WHERE id = ?;                         |     6 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     0 |      3 | blacklist
+     10 | 3407341580 | ALTER SYSTEM SET sql_firewall.firewall TO    disabled;       |     0 |      0 | whitelist
+     10 | 1536176700 | UPDATE employee SET age = age + ? WHERE id in (?, ?);        |     0 |      3 | blacklist
+     10 | 1264075694 | SELECT * FROM employee;                                      |     6 |      0 | whitelist
+     10 | 2128089821 | SELECT wait_be_set(?, ?);                                    |     8 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     2 |      0 | whitelist
+     10 |  167207106 | SHOW sql_firewall.firewall;                                  |     1 |      0 | whitelist
+     10 | 3186211987 | ALTER SYSTEM SET sql_firewall.engine TO whitelist;           |     1 |      0 | whitelist
+     10 |  696132012 | ALTER SYSTEM SET sql_firewall.engine TO blacklist;           |     1 |      0 | whitelist
+     10 | 1378796334 | SELECT pg_reload_conf();                                     |     3 |      0 | whitelist
+(15 rows)
+
+ALTER SYSTEM SET sql_firewall.engine TO blacklist;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'blacklist');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ blacklist
+(1 row)
+
+-- 
+-- should be allowed. for blacklist rule engine, there is no blacklist rule for
+-- them.
+-- 
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     | 134
+  2 | m      | Cheng Cheng | 138
+  3 | m      | Cai Lei     | 141
+  5 | f      | Chen Wei    | 150
+  6 | m      | Li Ming     | 145
+(5 rows)
+
+SELECT * FROM employee WHERE id = 1;
+ id | gender |  name   | age 
+----+--------+---------+-----
+  1 | f      | Bai Cai | 134
+(1 row)
+
+--
+-- should be allowed. for blacklist rule engine, there is no blacklist rule for
+-- them.
+--
+UPDATE employee SET age = age - 100;
+--
+-- the following queries are not allowed, as there are blacklist rules for
+-- them and the rule engine is in blacklist mode.
+UPDATE employee SET age = age + 10 WHERE id in (2, 3);
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : UPDATE employee SET age = age + 10 WHERE id in (2, 3);
+SELECT * FROM employee WHERE id in (5, 10);
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : SELECT * FROM employee WHERE id in (5, 10);
+-- 
+-- verify the execution of above queries
+-- 
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  34
+  2 | m      | Cheng Cheng |  38
+  3 | m      | Cai Lei     |  41
+  5 | f      | Chen Wei    |  50
+  6 | m      | Li Ming     |  45
+(5 rows)
+
+--------------------------------------------------------------------------------
+-- 
+-- testcase 06: whitelist rule engine
+--   switched from blacklist rule engine
+-- 
+--------------------------------------------------------------------------------
+-- pg_sleep is radomly called so we ignore it here.
+SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE '%pg_sleep%';
+ userid |  queryid   |                            query                             | calls | banned |   type    
+--------+------------+--------------------------------------------------------------+-------+--------+-----------
+     10 | 4175383890 | ALTER SYSTEM SET sql_firewall.engine TO hybrid;              |     1 |      0 | whitelist
+     10 | 2902689240 | SHOW sql_firewall.engine;                                    |     3 |      0 | whitelist
+     10 | 3858458623 | SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE ?; |     8 |      0 | whitelist
+     10 | 1877630178 | UPDATE employee SET age = age + ?;                           |     6 |      0 | whitelist
+     10 | 3459310925 | SELECT * FROM employee WHERE id = ?;                         |     6 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     0 |      4 | blacklist
+     10 | 3407341580 | ALTER SYSTEM SET sql_firewall.firewall TO    disabled;       |     0 |      0 | whitelist
+     10 | 1536176700 | UPDATE employee SET age = age + ? WHERE id in (?, ?);        |     0 |      4 | blacklist
+     10 | 1264075694 | SELECT * FROM employee;                                      |     6 |      0 | whitelist
+     10 | 2128089821 | SELECT wait_be_set(?, ?);                                    |     8 |      0 | whitelist
+     10 |  549243647 | SELECT * FROM employee WHERE id in (?, ?);                   |     2 |      0 | whitelist
+     10 |  167207106 | SHOW sql_firewall.firewall;                                  |     1 |      0 | whitelist
+     10 | 3186211987 | ALTER SYSTEM SET sql_firewall.engine TO whitelist;           |     1 |      0 | whitelist
+     10 |  696132012 | ALTER SYSTEM SET sql_firewall.engine TO blacklist;           |     2 |      0 | whitelist
+     10 | 1378796334 | SELECT pg_reload_conf();                                     |     4 |      0 | whitelist
+(15 rows)
+
+ALTER SYSTEM SET sql_firewall.engine TO whitelist;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'whitelist');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ whitelist
+(1 row)
+
+-- 
+-- there is a whitelist rule for following queries, they are permitted,
+-- these rules are learned whitelist rules.
+-- 
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  34
+  2 | m      | Cheng Cheng |  38
+  3 | m      | Cai Lei     |  41
+  5 | f      | Chen Wei    |  50
+  6 | m      | Li Ming     |  45
+(5 rows)
+
+SELECT * FROM employee WHERE id = 1;
+ id | gender |  name   | age 
+----+--------+---------+-----
+  1 | f      | Bai Cai |  34
+(1 row)
+
+--
+-- there is also a whitelist rule for this query, it is permitted, the rule is
+-- mannully added as above.
+--
+UPDATE employee SET age = age + 100;
+--
+-- the following queries are not permitted, as there are no whitelist rules for
+-- them and the rule engine is in whitelist mode.
+UPDATE employee SET age = age + 10 WHERE id in (2, 3);
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : UPDATE employee SET age = age + 10 WHERE id in (2, 3);
+SELECT * FROM employee WHERE id in (5, 10);
+ id | gender |   name   | age 
+----+--------+----------+-----
+  5 | f      | Chen Wei | 150
+(1 row)
+
+-- 
+-- verify the execution of above queries
+-- 
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     | 134
+  2 | m      | Cheng Cheng | 138
+  3 | m      | Cai Lei     | 141
+  5 | f      | Chen Wei    | 150
+  6 | m      | Li Ming     | 145
+(5 rows)
+
+--
+-- testcase level teardown
+--
+ALTER SYSTEM SET sql_firewall.firewall TO    disabled;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.firewall', 'disabled');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.firewall;
+ sql_firewall.firewall 
+-----------------------
+ disabled
+(1 row)
+
+DROP TABLE employee;

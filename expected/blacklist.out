@@ -1,0 +1,419 @@
+--
+-- blacklist engine tests
+--
+ALTER SYSTEM SET sql_firewall.firewall TO disabled;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.firewall', 'disabled');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.firewall;
+ sql_firewall.firewall 
+-----------------------
+ disabled
+(1 row)
+
+SELECT sql_firewall_reset();
+ sql_firewall_reset 
+--------------------
+ 
+(1 row)
+
+CREATE TABLE employee(id int, gender char, name text, age int);
+INSERT INTO employee(id, gender, name, age) VALUES (1, 'f', 'Bai Cai',     16), 
+       	    		 	       	    	   (2, 'm', 'Cheng Cheng', 20),
+						   (3, 'm', 'Cai Lei',     23);
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  16
+  2 | m      | Cheng Cheng |  20
+  3 | m      | Cai Lei     |  23
+(3 rows)
+
+--
+-- verify the default settings of sql_firewall
+--
+SHOW sql_firewall.firewall;
+ sql_firewall.firewall 
+-----------------------
+ disabled
+(1 row)
+
+SHOW sql_firewall.max;
+ sql_firewall.max 
+------------------
+ 5000
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ whitelist
+(1 row)
+
+--------------------------------------------------------------------------------
+--
+-- testcase
+--   add a blacklist rule, and it would ban our query as expected
+--
+--------------------------------------------------------------------------------
+-- 
+-- set to blacklist engine
+--
+ALTER SYSTEM SET sql_firewall.engine   TO blacklist;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'blacklist');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ blacklist
+(1 row)
+
+--
+-- prohibited queries
+--
+SELECT sql_firewall.add_rule('postgres', 'SELECT * FROM employee WHERE id = 1;', 'blacklist');
+ add_rule 
+----------
+ t
+(1 row)
+
+ALTER SYSTEM SET sql_firewall.firewall TO enforcing;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.firewall', 'enforcing');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.firewall;
+ sql_firewall.firewall 
+-----------------------
+ enforcing
+(1 row)
+
+						
+--
+-- confirm the rules of configured rules would prohibit queries as expected.
+--
+SELECT * FROM sql_firewall.all_rules;
+ userid |  queryid   |                query                 | calls | banned |   type    
+--------+------------+--------------------------------------+-------+--------+-----------
+     10 | 3459310925 | SELECT * FROM employee WHERE id = ?; |     0 |      0 | blacklist
+(1 row)
+
+--------------------------------------------------------------------------------
+--
+-- testcase
+--   delete the rule of 'SELECT' and add an 'UPDATE' rule, we make sure that
+--   the previous 'SELECT' query could be executed, and the new add 'UPDATE'
+--   rule should prohibit our update query.
+--
+--------------------------------------------------------------------------------
+SELECT * FROM employee WHERE id = 2;
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : SELECT * FROM employee WHERE id = 2;
+SELECT * FROM employee ORDER BY id;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  16
+  2 | m      | Cheng Cheng |  20
+  3 | m      | Cai Lei     |  23
+(3 rows)
+
+UPDATE employee SET age = age + 1 WHERE id = 2;
+SELECT * FROM employee ORDER BY id;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  16
+  2 | m      | Cheng Cheng |  21
+  3 | m      | Cai Lei     |  23
+(3 rows)
+
+ALTER SYSTEM SET sql_firewall.firewall TO disabled;
+SELECT pg_reload_conf();	-- switch to disabled mode
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.firewall', 'disabled');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.firewall;
+ sql_firewall.firewall 
+-----------------------
+ disabled
+(1 row)
+
+--
+-- confirm the rules of configured rules would prohibit queries as expected.
+--
+SELECT * FROM sql_firewall.all_rules;
+ userid |  queryid   |                query                 | calls | banned |   type    
+--------+------------+--------------------------------------+-------+--------+-----------
+     10 | 3459310925 | SELECT * FROM employee WHERE id = ?; |     0 |      1 | blacklist
+(1 row)
+
+SHOW sql_firewall.firewall;
+ sql_firewall.firewall 
+-----------------------
+ disabled
+(1 row)
+
+SELECT sql_firewall.del_rule('postgres', 'SELECT * FROM employee WHERE id = 1;',            'blacklist');
+ del_rule 
+----------
+ t
+(1 row)
+
+SELECT sql_firewall.add_rule('postgres', 'UPDATE employee SET age = age + 1 WHERE id = 1;', 'blacklist');
+ add_rule 
+----------
+ t
+(1 row)
+
+-- this rule would be applied to all users
+SELECT sql_firewall.add_rule('',         'UPDATE employee SET age = 100',                   'blacklist');
+ add_rule 
+----------
+ t
+(1 row)
+
+ALTER SYSTEM SET sql_firewall.firewall TO enforcing;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.firewall', 'enforcing');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.firewall;
+ sql_firewall.firewall 
+-----------------------
+ enforcing
+(1 row)
+
+						
+--
+-- confirm the rules of configured rules would prohibit queries as expected.
+--
+SELECT * FROM sql_firewall.all_rules;
+ userid |  queryid   |                      query                      | calls | banned |   type    
+--------+------------+-------------------------------------------------+-------+--------+-----------
+     10 | 2549123990 | UPDATE employee SET age = age + ? WHERE id = ?; |     0 |      0 | blacklist
+      0 |  602808818 | UPDATE employee SET age = ?                     |     0 |      0 | blacklist
+(2 rows)
+
+--
+-- the update should be prohibited, as it is in the blacklist rules we added
+-- as above.
+--
+SELECT * FROM employee WHERE id = 2;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  2 | m      | Cheng Cheng |  21
+(1 row)
+
+SELECT * FROM employee ORDER BY id;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  16
+  2 | m      | Cheng Cheng |  21
+  3 | m      | Cai Lei     |  23
+(3 rows)
+
+UPDATE employee SET age = age + 1 WHERE id = 2;
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : UPDATE employee SET age = age + 1 WHERE id = 2;
+UPDATE employee SET age = 102;
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : UPDATE employee SET age = 102;
+SELECT * FROM employee ORDER BY id;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  16
+  2 | m      | Cheng Cheng |  21
+  3 | m      | Cai Lei     |  23
+(3 rows)
+
+--
+-- testcase:
+--   rules applied to all user would ban the new created user 'sqlfirewall_user'
+--   but rules defined for concrete user would not ban the our query
+--
+-- pg_sleep is radomly called so we ignore it here.
+SELECT * FROM sql_firewall.all_rules WHERE query NOT LIKE '%pg_sleep%';
+ userid |  queryid   |                      query                      | calls | banned |   type    
+--------+------------+-------------------------------------------------+-------+--------+-----------
+     10 | 2549123990 | UPDATE employee SET age = age + ? WHERE id = ?; |     0 |      1 | blacklist
+      0 |  602808818 | UPDATE employee SET age = ?                     |     0 |      1 | blacklist
+(2 rows)
+
+CREATE USER sqlfirewall_user WITH PASSWORD 'sqlfirewall';
+GRANT ALL ON TABLE employee TO sqlfirewall_user;
+SET SESSION AUTHORIZATION sqlfirewall_user;
+SELECT * FROM employee WHERE id = 2;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  2 | m      | Cheng Cheng |  21
+(1 row)
+
+SELECT * FROM employee ORDER BY id;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  16
+  2 | m      | Cheng Cheng |  21
+  3 | m      | Cai Lei     |  23
+(3 rows)
+
+UPDATE employee SET age = age + 1 WHERE id = 2;
+UPDATE employee SET age = 102;
+ERROR:  Prohibited SQL statement - sql firewall violation
+HINT:  SQL statement : UPDATE employee SET age = 102;
+SELECT * FROM employee ORDER BY id;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  16
+  2 | m      | Cheng Cheng |  22
+  3 | m      | Cai Lei     |  23
+(3 rows)
+
+\c -
+--------------------------------------------------------------------------------
+--
+-- testcase
+--   we do have a firewall rule here , but we disable the firewall, so we
+--   can successfully do any query we have been banned before when the
+--   firewall was in 'enforcing' mode.
+--
+--------------------------------------------------------------------------------
+ALTER SYSTEM SET sql_firewall.firewall TO disabled;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.firewall', 'disabled');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.firewall;
+ sql_firewall.firewall 
+-----------------------
+ disabled
+(1 row)
+
+						
+--
+-- confirm the rules of configured rules would prohibit queries as expected.
+--
+SELECT * FROM sql_firewall.all_rules;
+ userid |  queryid   |                      query                      | calls | banned |   type    
+--------+------------+-------------------------------------------------+-------+--------+-----------
+     10 | 2549123990 | UPDATE employee SET age = age + ? WHERE id = ?; |     0 |      1 | blacklist
+      0 |  602808818 | UPDATE employee SET age = ?                     |     0 |      2 | blacklist
+(2 rows)
+
+--
+-- all query should be performed, the sql firewall has been disabled
+--
+SELECT * FROM employee WHERE id = 2;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  2 | m      | Cheng Cheng |  22
+(1 row)
+
+SELECT * FROM employee ORDER BY id;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  16
+  2 | m      | Cheng Cheng |  22
+  3 | m      | Cai Lei     |  23
+(3 rows)
+
+UPDATE employee SET age = age + 1 WHERE id = 2;
+SELECT * FROM employee ORDER BY id;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  16
+  2 | m      | Cheng Cheng |  23
+  3 | m      | Cai Lei     |  23
+(3 rows)
+
+--
+-- teardown
+--
+DROP USER prohibited_user;
+ERROR:  role "prohibited_user" does not exist
+DROP TABLE employee;

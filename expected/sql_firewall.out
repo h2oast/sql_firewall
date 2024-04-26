@@ -1,0 +1,282 @@
+--
+-- extension management tests
+--   * entension creation and drop operation is ok or not
+--   * default parameter settings
+--   * change paramenter approaches
+--
+ALTER SYSTEM SET sql_firewall.firewall TO disabled;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.firewall', 'disabled');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.firewall;
+ sql_firewall.firewall 
+-----------------------
+ disabled
+(1 row)
+
+SELECT sql_firewall_reset();
+ sql_firewall_reset 
+--------------------
+ 
+(1 row)
+
+SELECT * FROM sql_firewall.all_rules;
+ userid | queryid | query | calls | banned | type 
+--------+---------+-------+-------+--------+------
+(0 rows)
+
+CREATE TABLE employee(id int, gender char, name text, age int);
+INSERT INTO employee(id, gender, name, age) VALUES (1, 'f', 'Bai Cai',     16), 
+       	    		 	       	    	   (2, 'm', 'Cheng Cheng', 20),
+						   (3, 'm', 'Cai Lei',     23);
+SELECT * FROM employee;
+ id | gender |    name     | age 
+----+--------+-------------+-----
+  1 | f      | Bai Cai     |  16
+  2 | m      | Cheng Cheng |  20
+  3 | m      | Cai Lei     |  23
+(3 rows)
+
+--
+-- verify the settings of sql_firewall as we expected
+--
+SHOW sql_firewall.firewall;
+ sql_firewall.firewall 
+-----------------------
+ disabled
+(1 row)
+
+SHOW sql_firewall.max;
+ sql_firewall.max 
+------------------
+ 5000
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ hybrid
+(1 row)
+
+--------------------------------------------------------------------------------
+--
+-- testcase
+--   rule engine switch
+--
+--
+--------------------------------------------------------------------------------
+--
+-- set rule engine to whitelist engine
+--
+ALTER SYSTEM SET sql_firewall.engine TO whitelist;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'whitelist');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ whitelist
+(1 row)
+
+--
+-- whitelist engine -> blacklist engine
+--
+ALTER SYSTEM SET sql_firewall.engine   TO blacklist;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'blacklist');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ blacklist
+(1 row)
+
+--
+-- blacklist engine -> hybrid engine
+--
+ALTER SYSTEM SET sql_firewall.engine   TO hybrid;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'hybrid');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ hybrid
+(1 row)
+
+--
+-- hybrid engine -> whitelist engine
+--
+ALTER SYSTEM SET sql_firewall.engine   TO whitelist;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'whitelist');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ whitelist
+(1 row)
+
+--
+-- whitelist engine -> hybrid engine
+--
+ALTER SYSTEM SET sql_firewall.engine    TO hybrid;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'hybrid');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ hybrid
+(1 row)
+
+--
+-- hybrid engine -> black engine
+--
+ALTER SYSTEM SET sql_firewall.engine    TO blacklist;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'blacklist');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ blacklist
+(1 row)
+
+--
+-- blacklist engine -> whitelist engine
+--
+ALTER SYSTEM SET sql_firewall.engine    TO whitelist;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT wait_be_set('sql_firewall.engine', 'whitelist');
+ wait_be_set 
+-------------
+           0
+(1 row)
+
+SHOW sql_firewall.engine;
+ sql_firewall.engine 
+---------------------
+ whitelist
+(1 row)
+
+--
+-- cleanup test
+--
+DROP TABLE employee;

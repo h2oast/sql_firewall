@@ -1,0 +1,7 @@
+--------------------------------------------------------------------------------
+--
+-- cleanup for sql_firewall tests
+--
+--------------------------------------------------------------------------------
+DROP FUNCTION  wait_be_set(text, text);
+DROP EXTENSION IF EXISTS sql_firewall;
